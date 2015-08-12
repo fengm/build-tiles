@@ -25,8 +25,8 @@ def main():
 	_opts = _init_env()
 	del _opts
 
-	import serv_web
-	serv_web._zips = serv_web.load_zips()
+	# import serv_web
+	# serv_web._zips = serv_web.load_zips()
 
 	_routes = [
 		(r'/', 'serv_web.web'),

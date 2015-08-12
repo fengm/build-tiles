@@ -7,32 +7,35 @@ class web(serv_base.service_base):
 	def task(self):
 		self.output_html('<html><body>Map</body></html>')
 
-def load_zips():
+_zips = {}
+
+def load_zips(load=False):
+	global _zips
+
+	if not load:
+		return _zips
+
 	import os
 	import config
 	import read_zip
 
-	_zips = {}
-
 	_root = config.get_at('general', 'web_path')
-	print 'loading zip files', _root
-
 	for _f in os.listdir(_root):
 		if _f.endswith('.zip'):
-			print ' + loading zip', _f
-			_zips[_f[:-4]] = read_zip.zip_file(os.path.join(_root, _f))
+			_t = _f[:-4]
+			if _t not in _zips:
+				print ' + loading zip', _f,
+				import sys
+				sys.stdout.flush()
 
-	print 'done'
+				_zips[_t] = read_zip.zip_file(os.path.join(_root, _f))
+				print 'done'
+
 	return _zips
-
-_zips = None
 
 class map(serv_base.service_base):
 
 	def __init__(self, request, response):
-		global _zips
-
-		self.zips = _zips
 		serv_base.service_base.__init__(self, request, response)
 
 	def task(self, path):
@@ -40,17 +43,29 @@ class map(serv_base.service_base):
 
 		_p, _v = path.split('/', 1)
 
-		if _p in self.zips.keys():
-			_r = self.zips[_p].load(_v)
-			if _r == None:
-				self.output_file(config.get_at('general', 'nodata_file'))
-			else:
-				self.output_byte(path, _r)
-		else:
+		_d_web = config.get_at('general', 'web_path')
+
+		if os.path.exists(os.path.join(_d_web, _p)):
 			logging.info('loading web path: ' + path)
-			_f = os.path.join(config.get_at('general', 'web_path'), path)
+			_f = os.path.join(_d_web, path)
 			if not os.path.exists(_f):
 				_f = config.get_at('general', 'nodata_file')
 
-			self.output_file(_f)
+			return self.output_file(_f)
+
+		_zips = load_zips()
+		if _p not in _zips.keys():
+			if os.path.exists(os.path.join(_d_web, _p + '.zip')):
+				_zips = load_zips(True)
+
+		if _p in _zips:
+			_r = _zips[_p].load(_v)
+			if _r == None:
+				if _v.endswith('.png'):
+					return self.output_file(config.get_at('general', 'nodata_file'))
+				raise Exception('failed to find page %s' % path)
+			else:
+				return self.output_byte(path, _r)
+
+		raise Exception('no module found %s' % _p)
 
